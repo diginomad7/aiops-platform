@@ -1,0 +1,93 @@
+# Запросы Prometheus для обнаружения аномалий
+queries:
+  # Мониторинг нагрузки на CPU
+  cpu_usage:
+    query: "sum(rate(node_cpu_seconds_total{mode!=\"idle\"}[5m])) by (instance) / count(node_cpu_seconds_total{mode=\"idle\"}) by (instance) * 100"
+    description: "Использование CPU в процентах для узлов кластера"
+    threshold: 90.0
+    detector_type: "statistical"
+    window_size: 60
+    collect_interval: "1m"
+  
+  # Мониторинг использования памяти
+  memory_usage:
+    query: "100 - ((node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100)"
+    description: "Использование оперативной памяти в процентах"
+    threshold: 85.0
+    detector_type: "window"
+    window_size: 30
+    collect_interval: "1m"
+  
+  # Мониторинг нагрузки на диск
+  disk_usage:
+    query: "(node_filesystem_size_bytes - node_filesystem_avail_bytes) / node_filesystem_size_bytes * 100"
+    description: "Использование дискового пространства в процентах"
+    threshold: 90.0
+    detector_type: "statistical"
+    window_size: 24
+    collect_interval: "5m"
+  
+  # Мониторинг сетевого трафика
+  network_traffic:
+    query: "sum(rate(node_network_transmit_bytes_total[5m]) + rate(node_network_receive_bytes_total[5m])) by (instance)"
+    description: "Общий сетевой трафик (отправка + получение) в байтах в секунду"
+    threshold: 3.0
+    detector_type: "isolation_forest"
+    num_trees: 100
+    sample_size: 256
+    collect_interval: "1m"
+  
+  # Мониторинг задержки ответа API
+  api_latency:
+    query: "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{job=\"api-server\"}[5m])) by (le))"
+    description: "95й процентиль времени ответа API-сервера в секундах"
+    threshold: 0.5
+    detector_type: "window"
+    window_size: 60
+    collect_interval: "30s"
+  
+  # Мониторинг ошибок HTTP
+  http_errors:
+    query: "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100"
+    description: "Процент HTTP 5xx ошибок от общего количества запросов"
+    threshold: 5.0
+    detector_type: "statistical"
+    window_size: 60
+    collect_interval: "1m"
+  
+  # Мониторинг доступности сервисов
+  service_availability:
+    query: "sum(up{job=~\".*\"}) by (job) / count(up{job=~\".*\"}) by (job) * 100"
+    description: "Доступность сервисов в процентах"
+    threshold: 99.0
+    detector_type: "window"
+    window_size: 30
+    collect_interval: "30s"
+  
+  # Мониторинг времени выполнения запросов к базе данных
+  db_query_time:
+    query: "histogram_quantile(0.95, sum(rate(database_query_duration_seconds_bucket[5m])) by (le))"
+    description: "95й процентиль времени выполнения запросов к базе данных в секундах"
+    threshold: 1.0
+    detector_type: "statistical"
+    window_size: 60
+    collect_interval: "1m"
+  
+  # Мониторинг размера очереди сообщений
+  queue_size:
+    query: "rabbitmq_queue_messages{queue!=\"\"}"
+    description: "Количество сообщений в очереди RabbitMQ"
+    threshold: 1000.0
+    detector_type: "isolation_forest"
+    num_trees: 50
+    sample_size: 128
+    collect_interval: "1m"
+  
+  # Мониторинг задержки обработки в очереди
+  queue_processing_time:
+    query: "histogram_quantile(0.95, sum(rate(message_processing_duration_seconds_bucket[5m])) by (le))"
+    description: "95й процентиль времени обработки сообщений в очереди в секундах"
+    threshold: 2.0
+    detector_type: "window"
+    window_size: 60
+    collect_interval: "1m" 

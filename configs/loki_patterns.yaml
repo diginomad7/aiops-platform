@@ -1,0 +1,129 @@
+# Loki Log Patterns Configuration
+# Шаблоны для обнаружения аномалий в логах приложений
+
+# Список шаблонов для обнаружения аномалий
+patterns:
+  # Ошибки аутентификации
+  - name: auth_failure
+    pattern: "failed login|authentication failed|access denied|unauthorized"
+    severity: high
+    description: "Множественные ошибки аутентификации"
+    labels:
+      - "app=auth-service"
+  
+  # Ошибки баз данных
+  - name: db_connection_failure
+    pattern: "connection refused|database error|db connection|timeout connecting to db"
+    severity: high
+    description: "Проблемы с подключением к базе данных"
+    labels:
+      - "component=database"
+  
+  # Ошибки Kubernetes
+  - name: pod_crash_loop
+    pattern: "BackOff|CrashLoopBackOff|Error: ImagePullBackOff"
+    severity: high
+    description: "Pod находится в состоянии CrashLoopBackOff"
+    labels:
+      - "source=kubernetes"
+  
+  # Ошибки внешних сервисов
+  - name: external_service_error
+    pattern: "external service|api error|gateway timeout|service unavailable"
+    severity: medium
+    description: "Ошибки при обращении к внешним сервисам"
+    labels: []
+  
+  # Ошибки конфигурации
+  - name: config_error
+    pattern: "invalid config|configuration error|missing configuration|config not found"
+    severity: medium
+    description: "Ошибки в конфигурации приложения"
+    labels: []
+  
+  # Ошибки сетевого взаимодействия
+  - name: network_error
+    pattern: "connection refused|timeout|network error|connection reset"
+    severity: medium
+    description: "Сетевые ошибки"
+    labels: []
+  
+  # Ошибки памяти
+  - name: memory_issue
+    pattern: "out of memory|memory limit|memory allocation failure|heap dump"
+    severity: high
+    description: "Проблемы с памятью"
+    labels: []
+  
+  # Проблемы с дисковым пространством
+  - name: disk_space_issue
+    pattern: "no space left on device|disk full|disk space|filesystem is full"
+    severity: high
+    description: "Недостаточно дискового пространства"
+    labels: []
+  
+  # Истечение времени ожидания
+  - name: request_timeout
+    pattern: "request timeout|operation timed out|deadline exceeded|context deadline exceeded"
+    severity: medium
+    description: "Истечение времени ожидания операции"
+    labels: []
+  
+  # Ошибки сертификатов
+  - name: certificate_error
+    pattern: "certificate error|certificate expired|invalid certificate|ssl error"
+    severity: high
+    description: "Проблемы с SSL/TLS сертификатами"
+    labels: []
+
+# Запросы Loki для мониторинга логов
+queries:
+  # Все ошибки уровня ERROR
+  - name: all_errors
+    query: '{app=~".+"} |~ "(?i)error" | logfmt'
+    interval: 5m
+  
+  # Ошибки аутентификации
+  - name: auth_errors
+    query: '{app="auth-service"} |~ "(?i)(failed login|authentication failed|access denied|unauthorized)"'
+    interval: 2m
+  
+  # Проблемы с базами данных
+  - name: database_errors
+    query: '{component="database"} |~ "(?i)(connection refused|database error|db connection|timeout)"'
+    interval: 2m
+  
+  # Ошибки Kubernetes
+  - name: kubernetes_errors
+    query: '{source="kubernetes"} |~ "(?i)(BackOff|CrashLoopBackOff|Error: ImagePullBackOff)"'
+    interval: 5m
+  
+  # Проблемы с памятью
+  - name: memory_issues
+    query: '{app=~".+"} |~ "(?i)(out of memory|memory limit|memory allocation failure|heap dump)"'
+    interval: 5m
+  
+  # Проблемы с дисковым пространством
+  - name: disk_space_issues
+    query: '{app=~".+"} |~ "(?i)(no space left on device|disk full|disk space|filesystem is full)"'
+    interval: 15m
+
+# Настройки пороговых значений для частоты ошибок
+thresholds:
+  # Порог количества ошибок за указанный период
+  errors:
+    # Критический порог для ошибок уровня ERROR
+    critical: 10
+    # Порог предупреждения для ошибок уровня ERROR
+    warning: 5
+    # Временное окно для анализа (в минутах)
+    timeWindow: 5
+  
+  # Порог количества предупреждений за указанный период
+  warnings:
+    # Критический порог для предупреждений уровня WARNING
+    critical: 20
+    # Порог предупреждения для предупреждений уровня WARNING
+    warning: 10
+    # Временное окно для анализа (в минутах)
+    timeWindow: 5 

@@ -1,0 +1,37 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+database:
+  type: "sqlite"
+  host: "localhost"
+  port: 5432
+  name: "aiops"
+  username: "aiops"
+  password: ""
+
+monitoring:
+  prometheus:
+    url: "http://localhost:9090"
+  grafana:
+    url: "http://localhost:3000"
+    username: "admin"
+    password: "admin123"
+
+logging:
+  level: "info"
+  format: "json"
+  loki:
+    url: "http://localhost:3100"
+
+ml:
+  model_path: "/data/models"
+  training_enabled: true
+  threshold: 0.8
+
+remediation:
+  enabled: true
+  auto_execute: false
+  max_retries: 3
+  retry_delay: "30s"
+  notification_url: "" 
