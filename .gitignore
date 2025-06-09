@@ -1,0 +1,10 @@
+bin/
+logs/
+temp/
+data/
+*.log
+*.out
+.env
+.vscode/
+.idea/
+.DS_Store
