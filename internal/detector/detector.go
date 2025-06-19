@@ -16,6 +16,10 @@ type Detector struct {
 	server     *http.Server
 	processors []Processor
 	shutdown   chan struct{}
+
+	// ctx управляет жизненным циклом процессоров
+	procCtx    context.Context
+	cancelProc context.CancelFunc
 }
 
 // Processor интерфейс для обработчиков аномалий
@@ -31,6 +35,8 @@ func New(config *types.Config) (*Detector, error) {
 		config:     config,
 		processors: make([]Processor, 0),
 		shutdown:   make(chan struct{}),
+		procCtx:    nil,
+		cancelProc: nil,
 	}
 
 	// Инициализируем HTTP сервер
@@ -56,11 +62,14 @@ func New(config *types.Config) (*Detector, error) {
 func (d *Detector) Start(ctx context.Context) error {
 	log.Printf("Starting detector on %s", d.server.Addr)
 
+	// Контекст для процессоров
+	d.procCtx, d.cancelProc = context.WithCancel(ctx)
+
 	// Запускаем процессоры
 	for _, processor := range d.processors {
 		log.Printf("Starting processor: %s", processor.Name())
 		go func(p Processor) {
-			if err := p.Start(ctx); err != nil {
+			if err := p.Start(d.procCtx); err != nil {
 				log.Printf("Processor %s error: %v", p.Name(), err)
 			}
 		}(processor)
@@ -93,6 +102,10 @@ func (d *Detector) Start(ctx context.Context) error {
 // Stop останавливает детектор
 func (d *Detector) Stop(ctx context.Context) error {
 	log.Println("Stopping detector...")
+
+	if d.cancelProc != nil {
+		d.cancelProc()
+	}
 
 	// Останавливаем процессоры
 	for _, processor := range d.processors {
