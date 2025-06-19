@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
 	"aiops-platform/internal/types"
@@ -12,10 +13,11 @@ import (
 
 // Detector представляет основной детектор аномалий
 type Detector struct {
-	config     *types.Config
-	server     *http.Server
-	processors []Processor
-	shutdown   chan struct{}
+	config       *types.Config
+	server       *http.Server
+	processors   []Processor
+	shutdown     chan struct{}
+	shutdownOnce sync.Once
 }
 
 // Processor интерфейс для обработчиков аномалий
@@ -107,7 +109,9 @@ func (d *Detector) Stop(ctx context.Context) error {
 		return fmt.Errorf("failed to shutdown HTTP server: %w", err)
 	}
 
-	close(d.shutdown)
+	d.shutdownOnce.Do(func() {
+		close(d.shutdown)
+	})
 	return nil
 }
 
