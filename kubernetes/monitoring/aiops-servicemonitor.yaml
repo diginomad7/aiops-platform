@@ -1,0 +1,47 @@
+# AIOps ServiceMonitor Configuration
+# Context7: Integration between Prometheus and AIOps Anomaly Detector
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: aiops-anomaly-detector
+  namespace: monitoring
+  labels:
+    app: aiops-anomaly-detector
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: anomaly-detector
+  namespaceSelector:
+    matchNames:
+      - default
+  endpoints:
+  - port: http
+    path: /metrics
+    interval: 30s
+    scrapeTimeout: 10s
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: 'aiops_.*'
+      action: keep
+
+---
+# Service для Anomaly Detector в default namespace (если еще не создан)
+apiVersion: v1
+kind: Service
+metadata:
+  name: anomaly-detector
+  namespace: default
+  labels:
+    app: anomaly-detector
+    context: context7
+spec:
+  selector:
+    app: anomaly-detector
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP 

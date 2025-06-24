@@ -1,0 +1,193 @@
+# Loki Stack Helm Values for AIOps Platform
+# Context7: Centralized logging with 40GB ZFS storage
+
+# Loki configuration
+loki:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 40Gi
+    accessModes:
+      - ReadWriteOnce
+  
+  securityContext:
+    runAsUser: 65534
+    runAsNonRoot: true
+    runAsGroup: 65534
+    fsGroup: 65534
+  
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  
+  config:
+    auth_enabled: false
+    
+    schema_config:
+      configs:
+        - from: 2023-01-01
+          store: boltdb-shipper
+          object_store: filesystem
+          schema: v11
+          index:
+            prefix: index_
+            period: 24h
+    
+    storage_config:
+      boltdb_shipper:
+        active_index_directory: /data/loki/index
+        cache_location: /data/loki/boltdb-cache
+        cache_ttl: 24h
+        shared_store: filesystem
+      filesystem:
+        directory: /data/loki/chunks
+    
+    limits_config:
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      retention_period: 14d
+      ingestion_rate_mb: 10
+      ingestion_burst_size_mb: 20
+      max_query_parallelism: 32
+    
+    chunk_store_config:
+      max_look_back_period: 336h
+    
+    table_manager:
+      retention_deletes_enabled: true
+      retention_period: 336h
+    
+    compactor:
+      working_directory: /data/loki/compactor
+      shared_store: filesystem
+      compaction_interval: 5m
+
+  service:
+    type: ClusterIP
+    port: 3100
+
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3100"
+
+# Promtail configuration
+promtail:
+  enabled: true
+  config:
+    clients:
+      - url: http://loki-headless.monitoring.svc.cluster.local:3100/loki/api/v1/push
+        timeout: 10s
+        backoff_config:
+          min_period: 500ms
+          max_period: 5s
+          max_retries: 10
+    
+    scrape_configs:
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels:
+              - __meta_kubernetes_namespace
+            target_label: namespace
+          - source_labels:
+              - __meta_kubernetes_pod_name
+            target_label: pod
+          - source_labels:
+              - __meta_kubernetes_pod_container_name
+            target_label: container
+          - source_labels:
+              - __meta_kubernetes_pod_node_name
+            target_label: node
+          - source_labels:
+              - __meta_kubernetes_pod_label_app
+            target_label: app
+            regex: (.+)
+            replacement: $1
+          - source_labels:
+              - __meta_kubernetes_pod_label_component
+            target_label: component
+            regex: (.+)
+            replacement: $1
+        pipeline_stages:
+          - docker: {}
+          # Special handling for anomaly detector logs
+          - match:
+              selector: '{app="anomaly-detector"}'
+              stages:
+                - json:
+                    expressions:
+                      level: level
+                      message: message
+                      timestamp: timestamp
+                      service: service
+                - labels:
+                    level:
+                    service:
+          # Special handling for Windows logs (if collected)
+          - match:
+              selector: '{app="windows-logs"}'
+              stages:
+                - json:
+                    expressions:
+                      level: level
+                      message: message
+                      source: source
+                - labels:
+                    level:
+                    source:
+
+  resources:
+    limits:
+      cpu: 200m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+  securityContext:
+    runAsUser: 65534
+    runAsGroup: 65534
+    fsGroup: 65534
+
+  tolerations:
+    - key: node-role.kubernetes.io/master
+      operator: Exists
+      effect: NoSchedule
+
+  serviceAccount:
+    create: true
+    name: promtail
+
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9080"
+
+# Disable other components
+grafana:
+  enabled: false  # We already have Grafana deployed
+
+fluent-bit:
+  enabled: false
+
+logstash:
+  enabled: false
+
+filebeat:
+  enabled: false
+
+prometheus:
+  enabled: false  # We already have Prometheus deployed
+
+# Common labels
+commonLabels:
+  context: context7
+  environment: development
+  project: aiops-platform
+  component: logging 

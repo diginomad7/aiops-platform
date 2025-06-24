@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-windows-scrape
+  namespace: monitoring
+data:
+  windows-scrape.yaml: |
+    - job_name: 'windows-server'
+      scrape_interval: 30s
+      static_configs:
+        - targets: ['192.168.0.5:9182']
+          labels:
+            instance: 'windows-server-prod'
+            os: 'windows' 

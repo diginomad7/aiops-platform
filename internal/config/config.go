@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -64,14 +65,11 @@ func LoadConfigFromEnv() *types.Config {
 			ModelPath:       getEnv("ML_MODEL_PATH", "/data/models"),
 			TrainingEnabled: getEnvBool("ML_TRAINING_ENABLED", true),
 			Threshold:       getEnvFloat("ML_THRESHOLD", 0.8),
+			FeatureWindow:   getEnvInt("ML_FEATURE_WINDOW", 20),
+			ModelType:       getEnv("ML_MODEL_TYPE", "isolation_forest"),
+			StoragePath:     getEnv("ML_STORAGE_PATH", "/data/models"),
 		},
-		Remediation: types.RemediationConfig{
-			Enabled:         getEnvBool("REMEDIATION_ENABLED", true),
-			AutoExecute:     getEnvBool("REMEDIATION_AUTO_EXECUTE", false),
-			MaxRetries:      getEnvInt("REMEDIATION_MAX_RETRIES", 3),
-			RetryDelay:      getEnvDuration("REMEDIATION_RETRY_DELAY", 30*time.Second),
-			NotificationURL: getEnv("NOTIFICATION_URL", ""),
-		},
+		// REMEDIATION REMOVED - Will use Rundeck for orchestration
 	}
 
 	setDefaults(config)
@@ -95,12 +93,16 @@ func setDefaults(config *types.Config) {
 	if config.ML.Threshold == 0 {
 		config.ML.Threshold = 0.8
 	}
-	if config.Remediation.MaxRetries == 0 {
-		config.Remediation.MaxRetries = 3
+	if config.ML.FeatureWindow == 0 {
+		config.ML.FeatureWindow = 20
 	}
-	if config.Remediation.RetryDelay == 0 {
-		config.Remediation.RetryDelay = 30 * time.Second
+	if config.ML.ModelType == "" {
+		config.ML.ModelType = "isolation_forest"
 	}
+	if config.ML.StoragePath == "" {
+		config.ML.StoragePath = "/data/models"
+	}
+	// REMEDIATION DEFAULTS REMOVED - Rundeck will handle orchestration
 }
 
 // getEnv возвращает значение переменной окружения или значение по умолчанию
@@ -147,6 +149,14 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 		if duration, err := time.ParseDuration(value); err == nil {
 			return duration
 		}
+	}
+	return defaultValue
+}
+
+// getEnvStringSlice возвращает срез строк из переменной окружения
+func getEnvStringSlice(key string, defaultValue []string) []string {
+	if value := os.Getenv(key); value != "" {
+		return strings.Split(value, ",")
 	}
 	return defaultValue
 }
@@ -199,9 +209,5 @@ func parseFloat(s string) (float64, error) {
 		}
 	}
 
-	if hasDecimal {
-		result += decimals / decimalPlace
-	}
-
-	return result, nil
+	return result + decimals/decimalPlace, nil
 }

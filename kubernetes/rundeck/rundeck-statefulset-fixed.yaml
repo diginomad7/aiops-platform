@@ -1,0 +1,107 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rundeck-secret
+  namespace: rundeck
+type: Opaque
+data:
+  # admin / admin123
+  RUNDECK_ADMIN_PASSWORD: YWRtaW4xMjM=
+  RUNDECK_DATABASE_PASSWORD: cnVuZGVjazEyMw==
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rundeck-data-pvc
+  namespace: rundeck
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rundeck
+  namespace: rundeck
+  labels:
+    app: rundeck
+    component: orchestrator
+spec:
+  serviceName: rundeck
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rundeck
+  template:
+    metadata:
+      labels:
+        app: rundeck
+        component: orchestrator
+    spec:
+      serviceAccountName: rundeck
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      containers:
+      - name: rundeck
+        image: rundeck/rundeck:4.17.0
+        env:
+        - name: RUNDECK_GRAILS_URL
+          value: "http://rundeck.rundeck:4440"
+        - name: RUNDECK_DATABASE_DRIVER
+          value: "org.postgresql.Driver"
+        - name: RUNDECK_DATABASE_URL
+          value: "jdbc:postgresql://postgresql:5432/rundeck"
+        - name: RUNDECK_DATABASE_USERNAME
+          value: "postgres"
+        - name: RUNDECK_DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rundeck-secret
+              key: RUNDECK_DATABASE_PASSWORD
+        - name: RUNDECK_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rundeck-secret
+              key: RUNDECK_ADMIN_PASSWORD
+        - name: RUNDECK_LOGGING_STRATEGY
+          value: "CONSOLE"
+        - name: RUNDECK_PLUGIN_PROVISIONING_ENABLED
+          value: "true"
+        ports:
+        - containerPort: 4440
+          name: rundeck
+        volumeMounts:
+        - name: rundeck-data
+          mountPath: /home/rundeck/server/data
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 4440
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 4440
+          initialDelaySeconds: 120
+          periodSeconds: 20
+          timeoutSeconds: 5
+      volumes:
+      - name: rundeck-data
+        persistentVolumeClaim:
+          claimName: rundeck-data-pvc

@@ -1,0 +1,158 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aiops-ml-detector
+  namespace: monitoring
+  labels:
+    app: aiops-detector
+    component: ml-pipeline
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aiops-detector
+      component: ml-pipeline
+  template:
+    metadata:
+      labels:
+        app: aiops-detector
+        component: ml-pipeline
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: aiops-ml
+      containers:
+      - name: aiops-detector
+        image: aiops-detector:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        - containerPort: 8081
+          name: metrics
+        env:
+        - name: CONFIG_PATH
+          value: "/config/ml.yaml"
+        - name: ML_STORAGE_PATH
+          value: "/data/models"
+        - name: PROMETHEUS_URL
+          value: "http://prometheus:9090"
+        - name: LOKI_URL
+          value: "http://loki:3100"
+        volumeMounts:
+        - name: config-volume
+          mountPath: /config
+          readOnly: true
+        - name: model-storage
+          mountPath: /data/models
+        - name: temp-storage
+          mountPath: /tmp
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: config-volume
+        configMap:
+          name: ml-config
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: ml-models-pvc
+      - name: temp-storage
+        emptyDir: {}
+      nodeSelector:
+        kubernetes.io/arch: amd64
+      tolerations:
+      - key: "aiops.io/ml-workload"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aiops-ml
+  namespace: monitoring
+  labels:
+    app: aiops-ml
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aiops-ml-reader
+  labels:
+    app: aiops-ml
+rules:
+- apiGroups: [""]
+  resources: ["pods", "nodes", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["metrics.k8s.io"]
+  resources: ["pods", "nodes"]
+  verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aiops-ml-reader-binding
+  labels:
+    app: aiops-ml
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aiops-ml-reader
+subjects:
+- kind: ServiceAccount
+  name: aiops-ml
+  namespace: monitoring
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-models-pvc
+  namespace: monitoring
+  labels:
+    app: aiops-ml
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard 

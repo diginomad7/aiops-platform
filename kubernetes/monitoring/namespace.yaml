@@ -1,0 +1,11 @@
+# AIOps Monitoring Namespace
+# Context7: Isolated namespace for monitoring stack components
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+    context: context7
+    component: observability 

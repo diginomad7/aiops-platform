@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sync"
 	"time"
 
+	"aiops-platform/internal/ml"
 	"aiops-platform/internal/types"
 )
 
@@ -16,6 +18,9 @@ type Detector struct {
 	server     *http.Server
 	processors []Processor
 	shutdown   chan struct{}
+	mu         sync.RWMutex
+	running    bool
+	mlPipeline *ml.Pipeline
 }
 
 // Processor интерфейс для обработчиков аномалий
@@ -49,65 +54,64 @@ func New(config *types.Config) (*Detector, error) {
 		return nil, fmt.Errorf("failed to initialize processors: %w", err)
 	}
 
+	// Инициализируем ML pipeline
+	var err error
+	detector.mlPipeline, err = ml.NewPipeline(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ML pipeline: %w", err)
+	}
+
 	return detector, nil
 }
 
 // Start запускает детектор
 func (d *Detector) Start(ctx context.Context) error {
-	log.Printf("Starting detector on %s", d.server.Addr)
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
-	// Запускаем процессоры
-	for _, processor := range d.processors {
-		log.Printf("Starting processor: %s", processor.Name())
-		go func(p Processor) {
-			if err := p.Start(ctx); err != nil {
-				log.Printf("Processor %s error: %v", p.Name(), err)
-			}
-		}(processor)
+	if d.running {
+		return fmt.Errorf("detector already running")
+	}
+
+	log.Printf("Starting AIOps detector...")
+
+	// Запускаем ML pipeline
+	if err := d.mlPipeline.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start ML pipeline: %w", err)
 	}
 
 	// Запускаем HTTP сервер
 	go func() {
+		log.Printf("Starting HTTP server on %s", d.server.Addr)
 		if err := d.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Printf("HTTP server error: %v", err)
 		}
 	}()
 
-	// Запускаем основной цикл
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
+	d.running = true
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-d.shutdown:
-			return nil
-		case <-ticker.C:
-			// Периодические проверки
-			d.performHealthCheck()
-		}
-	}
+	log.Printf("AIOps detector started successfully")
+	return nil
 }
 
 // Stop останавливает детектор
 func (d *Detector) Stop(ctx context.Context) error {
-	log.Println("Stopping detector...")
+	d.mu.Lock()
+	defer d.mu.Unlock()
 
-	// Останавливаем процессоры
-	for _, processor := range d.processors {
-		log.Printf("Stopping processor: %s", processor.Name())
-		if err := processor.Stop(ctx); err != nil {
-			log.Printf("Error stopping processor %s: %v", processor.Name(), err)
-		}
+	if !d.running {
+		return nil
 	}
 
-	// Останавливаем HTTP сервер
-	if err := d.server.Shutdown(ctx); err != nil {
-		return fmt.Errorf("failed to shutdown HTTP server: %w", err)
+	log.Println("Stopping AIOps detector...")
+
+	// Останавливаем ML pipeline
+	if err := d.mlPipeline.Stop(ctx); err != nil {
+		log.Printf("Error stopping ML pipeline: %v", err)
 	}
 
-	close(d.shutdown)
+	d.running = false
+	log.Println("AIOps detector stopped")
 	return nil
 }
 
@@ -156,7 +160,7 @@ func (d *Detector) anomaliesHandler(w http.ResponseWriter, r *http.Request) {
 func (d *Detector) getAnomalies(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"anomalies":[],"total":0}`))
+	w.Write([]byte(`{"anomalies":[],"total":0,"note":"Ready for Rundeck integration"}`))
 }
 
 func (d *Detector) performHealthCheck() {
@@ -232,4 +236,82 @@ func (p *LogProcessor) Name() string {
 func (p *LogProcessor) processLogs() {
 	// Заглушка для обработки логов
 	log.Printf("Processing logs from %s", p.config.Logging.Loki.URL)
+}
+
+// DetectAnomalies обнаруживает аномалии в метриках
+func (d *Detector) DetectAnomalies(metrics []types.MetricData) ([]*types.Anomaly, error) {
+	// Обнаружение аномалий с помощью ML pipeline
+	anomalies, err := d.mlPipeline.ProcessMetrics(metrics)
+	if err != nil {
+		return nil, fmt.Errorf("ML anomaly detection failed: %w", err)
+	}
+
+	// В будущем аномалии будут отправляться в Rundeck через REST API
+	if len(anomalies) > 0 {
+		log.Printf("Detected %d anomalies - will be sent to Rundeck orchestrator", len(anomalies))
+	}
+
+	return anomalies, nil
+}
+
+// GetMetrics возвращает метрики детектора
+func (d *Detector) GetMetrics() map[string]interface{} {
+	metrics := map[string]interface{}{
+		"processors": len(d.processors),
+		"running":    d.running,
+	}
+
+	// Добавляем метрики ML pipeline
+	mlMetrics := d.mlPipeline.GetMetrics()
+	if mlMetrics != nil {
+		metrics["ml_processed_samples"] = mlMetrics.ProcessedSamples
+		metrics["ml_detected_anomalies"] = mlMetrics.DetectedAnomalies
+		metrics["ml_processing_latency"] = mlMetrics.ProcessingLatency
+		metrics["ml_model_accuracy"] = mlMetrics.ModelAccuracy
+		metrics["ml_error_count"] = mlMetrics.ErrorCount
+	}
+
+	return metrics
+}
+
+// GetHealth возвращает информацию о здоровье детектора
+func (d *Detector) GetHealth() *types.HealthCheck {
+	status := "healthy"
+	message := "Detector is running normally - ready for Rundeck integration"
+
+	if !d.running {
+		status = "stopped"
+		message = "Detector is not running"
+	}
+
+	return &types.HealthCheck{
+		Service:   "aiops-detector",
+		Status:    status,
+		Message:   message,
+		Timestamp: time.Now(),
+	}
+}
+
+// ExportPrometheusMetrics экспортирует метрики в формате Prometheus
+func (d *Detector) ExportPrometheusMetrics() string {
+	var result string
+
+	// Метрика статуса детектора
+	result += "# HELP aiops_detector_up Detector is running\n"
+	result += "# TYPE aiops_detector_up gauge\n"
+	if d.running {
+		result += "aiops_detector_up 1\n"
+	} else {
+		result += "aiops_detector_up 0\n"
+	}
+
+	// Метрики ML pipeline
+	result += "# HELP aiops_ml_anomalies_detected_total Total number of anomalies detected\n"
+	result += "# TYPE aiops_ml_anomalies_detected_total counter\n"
+	result += "aiops_ml_anomalies_detected_total 0\n"
+
+	// Комментарий о Rundeck интеграции
+	result += "# Ready for Rundeck orchestrator integration\n"
+
+	return result
 }

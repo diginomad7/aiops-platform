@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-windows-alerts
+  namespace: monitoring
+  labels:
+    prometheus_alerts: "1"
+data:
+  windows-alerts.yaml: |-
+    groups:
+    - name: windows-server
+      rules:
+      - alert: WindowsServerDown
+        expr: up{job="windows-server"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          context: windows
+        annotations:
+          summary: "Windows Server недоступен"
+          description: "Windows Server (192.168.0.5) недоступен более 5 минут."
+          
+      - alert: WindowsHighCPUUsage
+        expr: 100 - (avg by (instance) (rate(windows_cpu_time_total{mode="idle"}[2m])) * 100) > 90
+        for: 10m
+        labels:
+          severity: warning
+          context: windows
+        annotations:
+          summary: "Высокая загрузка CPU на Windows Server"
+          description: "Загрузка CPU на Windows Server (192.168.0.5) превышает 90% более 10 минут."
+          
+      - alert: WindowsHighMemoryUsage
+        expr: 100 * (1 - ((windows_memory_available_bytes) / (windows_os_physical_memory_free_bytes + windows_os_physical_memory_used_bytes))) > 90
+        for: 10m
+        labels:
+          severity: warning
+          context: windows
+        annotations:
+          summary: "Высокая загрузка памяти на Windows Server"
+          description: "Использование памяти на Windows Server (192.168.0.5) превышает 90% более 10 минут."
+          
+      - alert: WindowsLowDiskSpace
+        expr: 100 - (windows_logical_disk_free_bytes / windows_logical_disk_size_bytes * 100) > 90
+        for: 10m
+        labels:
+          severity: warning
+          context: windows
+        annotations:
+          summary: "Низкий объем свободного места на диске Windows Server"
+          description: "Использование дискового пространства на Windows Server (192.168.0.5) превышает 90% более 10 минут." 

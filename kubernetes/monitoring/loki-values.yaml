@@ -1,0 +1,110 @@
+# Loki Helm Values for AIOps Platform
+# Context7: Centralized logging with 40GB ZFS storage
+
+loki:
+  # Persistence configuration with ZFS storage
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 40Gi
+    accessModes:
+      - ReadWriteOnce
+  
+  # Security context to fix permission issues
+  securityContext:
+    runAsUser: 65534
+    runAsNonRoot: true
+    runAsGroup: 65534
+    fsGroup: 65534
+  
+  # Resource limits optimized for development environment
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 500m
+      memory: 1Gi
+  
+  # Loki configuration
+  config:
+    auth_enabled: false
+    
+    # Schema configuration for storage
+    schema_config:
+      configs:
+        - from: 2023-01-01
+          store: boltdb-shipper
+          object_store: filesystem
+          schema: v11
+          index:
+            prefix: index_
+            period: 24h
+    
+    # Storage configuration
+    storage_config:
+      boltdb_shipper:
+        active_index_directory: /data/loki/index
+        cache_location: /data/loki/boltdb-cache
+        cache_ttl: 24h
+        shared_store: filesystem
+      filesystem:
+        directory: /data/loki/chunks
+    
+    # Limits and retention configuration
+    limits_config:
+      enforce_metric_name: false
+      reject_old_samples: true
+      reject_old_samples_max_age: 168h
+      retention_period: 14d
+      ingestion_rate_mb: 10
+      ingestion_burst_size_mb: 20
+      max_query_parallelism: 32
+    
+    # Chunk management
+    chunk_store_config:
+      max_look_back_period: 336h
+    
+    # Table manager
+    table_manager:
+      retention_deletes_enabled: true
+      retention_period: 336h
+    
+    # Compaction
+    compactor:
+      working_directory: /data/loki/compactor
+      shared_store: filesystem
+      compaction_interval: 5m
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 3100
+
+# Readiness probe
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 30
+  timeoutSeconds: 1
+
+# Liveness probe
+livenessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 45
+  timeoutSeconds: 1
+
+# Pod annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "3100"
+
+# Common labels
+commonLabels:
+  context: context7
+  environment: development
+  project: aiops-platform
+  component: logging 

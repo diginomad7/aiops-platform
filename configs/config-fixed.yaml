@@ -1,0 +1,155 @@
+# AIOps Infrastructure Configuration
+
+# API-сервер
+api:
+  port: 8080
+  host: "0.0.0.0"
+  enable_cors: true
+  timeout: 30s
+
+# Настройки оркестратора
+orchestrator:
+  max_concurrent_actions: 10
+  action_timeout: 5m
+  history_limit: 1000
+
+# Настройки детектора аномалий
+detector:
+  statsd_address: "localhost:8125"
+  log_anomalies: true
+  default_threshold: 2.0
+
+# Настройки Prometheus
+prometheus:
+  enabled: true
+  url: "http://prometheus:9090"
+  collect_interval: 1m
+  alert_ttl: 30m
+  rules_path: "/etc/prometheus/rules"
+  evaluation_interval: "15s"
+  scrape_interval: "15s"
+  storage_retention: "15d"
+  default_detectors:
+    - name: cpu_usage
+      type: statistical
+      threshold: 90.0
+    - name: memory_usage
+      type: window
+      threshold: 85.0
+      window_size: 30
+    - name: api_latency
+      type: window
+      threshold: 0.5
+      window_size: 60
+    - name: http_errors
+      type: statistical
+      threshold: 5.0
+
+# Настройки Loki
+loki:
+  enabled: true
+  url: "http://loki:3100"
+
+# Настройки Kubernetes
+kubernetes:
+  inCluster: false
+  kubeConfigPath: "~/.kube/config"
+  namespace: "default"
+  service_account: ""
+
+# Настройки оповещений
+notifications:
+  slack:
+    webhook_url: "" # Устанавливается через переменную окружения SLACK_WEBHOOK_URL
+    default_channel: "#alerts"
+    username: "AIOps-Bot"
+  email:
+    smtp_server: "smtp.example.com:587"
+    from: "aiops-alerts@example.com"
+    to: 
+      - "admin@example.com"
+      - "devops@example.com"
+    auth:
+      username: "alerts@example.com"
+      password: "" # Устанавливается через переменную окружения SMTP_PASSWORD
+    enable_tls: true
+    template_path: "templates/email.html"
+  webhook:
+    url: ""
+    headers:
+      Content-Type: "application/json"
+
+# Настройки логирования
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+  file: "/var/log/aiops-detector.log"
+
+# Настройки скриптов восстановления
+scripts:
+  dir: "/etc/aiops-detector/scripts"
+  timeout: 60s
+  allowed_prefixes:
+    - "restart_"
+    - "fix_"
+    - "scale_"
+
+# Настройки детекторов аномалий
+detectors:
+  # Пороговые значения для метрик Prometheus
+  prometheus:
+    cpu:
+      threshold: 3.0
+      windowSize: 10
+    memory:
+      threshold: 3.0
+      minSamples: 30
+    disk:
+      threshold: 2.5
+      windowSize: 5
+    latency:
+      threshold: 0.8
+      algorithm: "isolation_forest"
+      numTrees: 100
+      sampleSize: 256
+  
+  # Пороговые значения для логов
+  logs:
+    errorThreshold: 10
+    warningThreshold: 20
+    timeWindow: 5  # в минутах
+
+# ML Configuration
+ml:
+  model_path: "models/current_model.json"
+  training_enabled: true
+  threshold: 0.6
+  feature_window: 20
+  model_type: "isolation_forest"
+  storage_path: "./models"
+
+# Rundeck Orchestrator Configuration
+rundeck:
+  url: "http://localhost:30440"
+  username: "admin"
+  password: "admin123"
+  project: "aiops-remediation"
+  timeout: 30s
+  
+  # Job mapping for different anomaly types
+  job_mappings:
+    cpu: "ml-triggered-remediation"
+    memory: "ml-triggered-remediation"
+    network: "ml-triggered-remediation"
+    disk: "ml-triggered-remediation"
+    pod_restart: "restart-high-cpu-pod"
+    scale_deployment: "scale-high-memory-deployment"
+    
+  # Remediation settings
+  auto_remediation:
+    enabled: true
+    severity_threshold: "high"  # Trigger for high/critical only
+    max_concurrent_jobs: 5
+    retry_count: 3
+    retry_delay: "30s" 

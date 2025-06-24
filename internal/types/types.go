@@ -1,39 +1,30 @@
 package types
-
 import (
 	"time"
 )
-
 // AnomalyType представляет тип аномалии
 type AnomalyType string
-
 const (
-	AnomalyTypeMetric AnomalyType = "metric"
-	AnomalyTypeLog    AnomalyType = "log"
-	AnomalyTypeTrace  AnomalyType = "trace"
+	MetricAnomaly AnomalyType = "metric"
+	LogAnomaly    AnomalyType = "log"
+	SystemAnomaly AnomalyType = "system"
 )
-
-// Severity представляет серьезность аномалии
+// Severity представляет уровень серьезности
 type Severity string
-
 const (
 	SeverityLow      Severity = "low"
 	SeverityMedium   Severity = "medium"
 	SeverityHigh     Severity = "high"
 	SeverityCritical Severity = "critical"
 )
-
-// ActionType представляет тип действия по восстановлению
+// ActionType представляет тип действия для восстановления
 type ActionType string
-
 const (
-	ActionTypeScale        ActionType = "scale"
-	ActionTypeRestart      ActionType = "restart"
+	ActionTypeKubernetes   ActionType = "kubernetes"
 	ActionTypeScript       ActionType = "script"
 	ActionTypeNotification ActionType = "notification"
 )
-
-// Anomaly представляет обнаруженную аномалию
+// Anomaly представляет аномалию в системе
 type Anomaly struct {
 	ID          string                 `json:"id"`
 	Type        AnomalyType            `json:"type"`
@@ -50,30 +41,6 @@ type Anomaly struct {
 	ResolvedAt  *time.Time             `json:"resolved_at,omitempty"`
 	Status      string                 `json:"status"`
 }
-
-// RemediationAction представляет действие по восстановлению
-type RemediationAction struct {
-	ID          string                 `json:"id"`
-	AnomalyID   string                 `json:"anomaly_id"`
-	Type        ActionType             `json:"type"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Parameters  map[string]interface{} `json:"parameters"`
-	Status      string                 `json:"status"`
-	CreatedAt   time.Time              `json:"created_at"`
-	ExecutedAt  *time.Time             `json:"executed_at,omitempty"`
-	CompletedAt *time.Time             `json:"completed_at,omitempty"`
-	Result      *ActionResult          `json:"result,omitempty"`
-}
-
-// ActionResult представляет результат выполнения действия
-type ActionResult struct {
-	Success bool                   `json:"success"`
-	Message string                 `json:"message"`
-	Data    map[string]interface{} `json:"data,omitempty"`
-	Error   string                 `json:"error,omitempty"`
-}
-
 // DetectorConfig представляет конфигурацию детектора
 type DetectorConfig struct {
 	ID         string                 `json:"id"`
@@ -87,15 +54,13 @@ type DetectorConfig struct {
 	CreatedAt  time.Time              `json:"created_at"`
 	UpdatedAt  time.Time              `json:"updated_at"`
 }
-
-// MetricData представляет метрические данные
+// MetricData представляет данные метрики
 type MetricData struct {
 	Name      string            `json:"name"`
 	Value     float64           `json:"value"`
 	Timestamp time.Time         `json:"timestamp"`
 	Labels    map[string]string `json:"labels"`
 }
-
 // LogEntry представляет запись в логе
 type LogEntry struct {
 	Timestamp time.Time              `json:"timestamp"`
@@ -105,7 +70,6 @@ type LogEntry struct {
 	Labels    map[string]string      `json:"labels"`
 	Fields    map[string]interface{} `json:"fields"`
 }
-
 // Event представляет событие в системе
 type Event struct {
 	ID        string                 `json:"id"`
@@ -115,31 +79,27 @@ type Event struct {
 	Data      map[string]interface{} `json:"data"`
 	Timestamp time.Time              `json:"timestamp"`
 }
-
-// HealthCheck представляет результат проверки здоровья
+// HealthCheck представляет проверку здоровья
 type HealthCheck struct {
 	Service   string    `json:"service"`
 	Status    string    `json:"status"`
 	Message   string    `json:"message"`
 	Timestamp time.Time `json:"timestamp"`
 }
-
-// Config представляет общую конфигурацию
+// Config представляет конфигурацию приложения
 type Config struct {
-	Server      ServerConfig      `yaml:"server"`
-	Database    DatabaseConfig    `yaml:"database"`
-	Monitoring  MonitoringConfig  `yaml:"monitoring"`
-	Logging     LoggingConfig     `yaml:"logging"`
-	ML          MLConfig          `yaml:"ml"`
-	Remediation RemediationConfig `yaml:"remediation"`
+	Server     ServerConfig     `yaml:"server"`
+	Database   DatabaseConfig   `yaml:"database"`
+	Monitoring MonitoringConfig `yaml:"monitoring"`
+	Logging    LoggingConfig    `yaml:"logging"`
+	ML         MLConfig         `yaml:"ml"`
+	Rundeck    RundeckConfig    `yaml:"rundeck"`
 }
-
 // ServerConfig представляет конфигурацию сервера
 type ServerConfig struct {
 	Host string `yaml:"host"`
 	Port int    `yaml:"port"`
 }
-
 // DatabaseConfig представляет конфигурацию базы данных
 type DatabaseConfig struct {
 	Type     string `yaml:"type"`
@@ -149,49 +109,75 @@ type DatabaseConfig struct {
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 }
-
 // MonitoringConfig представляет конфигурацию мониторинга
 type MonitoringConfig struct {
 	Prometheus PrometheusConfig `yaml:"prometheus"`
 	Grafana    GrafanaConfig    `yaml:"grafana"`
 }
-
 // PrometheusConfig представляет конфигурацию Prometheus
 type PrometheusConfig struct {
 	URL string `yaml:"url"`
 }
-
 // GrafanaConfig представляет конфигурацию Grafana
 type GrafanaConfig struct {
 	URL      string `yaml:"url"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 }
-
 // LoggingConfig представляет конфигурацию логирования
 type LoggingConfig struct {
 	Level  string     `yaml:"level"`
 	Format string     `yaml:"format"`
 	Loki   LokiConfig `yaml:"loki"`
 }
-
 // LokiConfig представляет конфигурацию Loki
 type LokiConfig struct {
 	URL string `yaml:"url"`
 }
-
-// MLConfig представляет конфигурацию ML компонентов
+// MLConfig представляет конфигурацию ML
 type MLConfig struct {
 	ModelPath       string  `yaml:"model_path"`
 	TrainingEnabled bool    `yaml:"training_enabled"`
 	Threshold       float64 `yaml:"threshold"`
+	FeatureWindow   int     `yaml:"feature_window"`
+	ModelType       string  `yaml:"model_type"`
+	StoragePath     string  `yaml:"storage_path"`
 }
-
-// RemediationConfig представляет конфигурацию восстановления
-type RemediationConfig struct {
-	Enabled         bool          `yaml:"enabled"`
-	AutoExecute     bool          `yaml:"auto_execute"`
-	MaxRetries      int           `yaml:"max_retries"`
-	RetryDelay      time.Duration `yaml:"retry_delay"`
-	NotificationURL string        `yaml:"notification_url"`
+// FeatureVector представляет вектор признаков для ML
+type FeatureVector struct {
+	Values     []float64         `json:"values"`
+	Labels     map[string]string `json:"labels"`
+	Timestamp  time.Time         `json:"timestamp"`
+	MetricName string            `json:"metric_name"`
+}
+// ProcessedMetrics представляет обработанные метрики
+type ProcessedMetrics struct {
+	Data       []MetricData   `json:"data"`
+	Features   *FeatureVector `json:"features,omitempty"`
+	Timestamp  time.Time      `json:"timestamp"`
+	WindowSize int            `json:"window_size"`
+}
+// ModelInfo представляет информацию о модели
+type ModelInfo struct {
+	ID         string                 `json:"id"`
+	Type       string                 `json:"type"`
+	Version    string                 `json:"version"`
+	CreatedAt  time.Time              `json:"created_at"`
+	UpdatedAt  time.Time              `json:"updated_at"`
+	Accuracy   float64                `json:"accuracy"`
+	Parameters map[string]interface{} `json:"parameters"`
+	FilePath   string                 `json:"file_path"`
+}
+// TrainingData представляет данные для обучения
+type TrainingData struct {
+	Features [][]float64            `json:"features"`
+	Labels   []int                  `json:"labels"` // 0 - normal, 1 - anomaly
+	Metadata map[string]interface{} `json:"metadata"`
+}
+// RundeckConfig представляет конфигурацию Rundeck
+type RundeckConfig struct {
+	URL      string `yaml:"url"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+	Project  string `yaml:"project"`
 }

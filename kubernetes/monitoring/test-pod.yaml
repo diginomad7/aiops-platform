@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: aiops-test-pod
+  namespace: default
+  labels:
+    app: aiops-test
+    component: integration-testing
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+    promtail.enabled: "true"
+spec:
+  containers:
+  - name: test-container
+    image: busybox:latest
+    command:
+    - /bin/sh
+    - -c
+    - |
+      while true; do
+        # Generate regular logs
+        echo "{\"level\":\"info\",\"message\":\"Regular log message\",\"timestamp\":\"$(date -Iseconds)\",\"component\":\"test-pod\"}"
+        sleep 10
+        
+        # Generate warning logs
+        echo "{\"level\":\"warning\",\"message\":\"Warning log message\",\"timestamp\":\"$(date -Iseconds)\",\"component\":\"test-pod\"}"
+        sleep 20
+        
+        # Generate error logs (less frequently)
+        if [ $((RANDOM % 5)) -eq 0 ]; then
+          echo "{\"level\":\"error\",\"message\":\"Error log message\",\"timestamp\":\"$(date -Iseconds)\",\"component\":\"test-pod\",\"error_code\":\"TEST-001\"}"
+        fi
+        
+        sleep 30
+      done
+    resources:
+      limits:
+        cpu: 100m
+        memory: 128Mi
+      requests:
+        cpu: 50m
+        memory: 64Mi 

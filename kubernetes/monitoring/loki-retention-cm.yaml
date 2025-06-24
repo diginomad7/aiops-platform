@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-retention-rules
+  namespace: monitoring
+data:
+  retention.yaml: |
+    # Loki retention policies
+    
+    # Global retention period
+    limits_config:
+      retention_period: 14d
+      
+      # Per-tenant retention periods
+      per_tenant_retention_period: 
+        aiops: 30d        # Keep AIOps logs longer
+        monitoring: 7d    # System monitoring logs kept for a week
+        default: 14d      # Default retention
+      
+      # Stream selectors for specific retention rules
+      retention_stream:
+        # Keep error logs longer
+        - selector: '{level="error"}'
+          priority: 1
+          period: 30d
+        
+        # Keep anomaly detector logs longer
+        - selector: '{app="anomaly-detector"}'
+          priority: 2
+          period: 30d
+        
+        # Keep critical system logs longer
+        - selector: '{namespace="kube-system", level="error"}'
+          priority: 1
+          period: 30d
+        
+        # Keep Windows error logs longer
+        - selector: '{app="windows-logs", level="ERROR"}'
+          priority: 1
+          period: 30d
+        
+        # Standard logs
+        - selector: '{}'
+          priority: 10
+          period: 14d 

@@ -9,3 +9,34 @@ data/
 .idea/
 .DS_Store
 cursor-memory-bank/
+
+# Binaries
+anomaly-detector
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# OS files
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.backup
+tmp/
+models/current_model.json
+
+# Config backups
+*config*.backup
+config-fixed.yaml

@@ -1,0 +1,118 @@
+# Promtail Helm Values for AIOps Platform
+# Context7: Log collection agent for Loki
+
+# Configuration for Promtail
+config:
+  # Client configuration for pushing logs to Loki
+  clients:
+    - url: http://loki:3100/loki/api/v1/push
+  
+  # Positions file for tracking reading progress
+  positions:
+    filename: /run/promtail/positions.yaml
+  
+  # Scrape configuration
+  scrape_configs:
+    # Kubernetes pods
+    - job_name: kubernetes-pods
+      kubernetes_sd_configs:
+        - role: pod
+      relabel_configs:
+        # Only scrape pods with the annotation "promtail.enabled: true"
+        - source_labels:
+            - __meta_kubernetes_pod_annotation_promtail_enabled
+          regex: "true"
+          action: keep
+        # Set the namespace as a label
+        - source_labels:
+            - __meta_kubernetes_namespace
+          target_label: namespace
+        # Set the pod name as a label
+        - source_labels:
+            - __meta_kubernetes_pod_name
+          target_label: pod
+        # Set the container name as a label
+        - source_labels:
+            - __meta_kubernetes_pod_container_name
+          target_label: container
+        # Set the node name as a label
+        - source_labels:
+            - __meta_kubernetes_pod_node_name
+          target_label: node
+        # Set the app name from pod labels
+        - source_labels:
+            - __meta_kubernetes_pod_label_app
+          target_label: app
+          regex: (.+)
+          replacement: $1
+        # Set the component name from pod labels
+        - source_labels:
+            - __meta_kubernetes_pod_label_component
+          target_label: component
+          regex: (.+)
+          replacement: $1
+      pipeline_stages:
+        - docker: {}
+        # Special handling for anomaly detector logs
+        - match:
+            selector: '{app="anomaly-detector"}'
+            stages:
+              - json:
+                  expressions:
+                    level: level
+                    message: message
+                    timestamp: timestamp
+                    service: service
+              - labels:
+                  level:
+                  service:
+        # Special handling for Windows logs (if collected)
+        - match:
+            selector: '{app="windows-logs"}'
+            stages:
+              - json:
+                  expressions:
+                    level: level
+                    message: message
+                    source: source
+              - labels:
+                  level:
+                  source:
+
+# Resource limits
+resources:
+  limits:
+    cpu: 200m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+# Security context
+securityContext:
+  runAsUser: 65534
+  runAsGroup: 65534
+  fsGroup: 65534
+
+# Tolerations to run on all nodes
+tolerations:
+  - key: node-role.kubernetes.io/master
+    operator: Exists
+    effect: NoSchedule
+
+# Service account
+serviceAccount:
+  create: true
+  name: promtail
+
+# Pod annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9080"
+
+# Common labels
+commonLabels:
+  context: context7
+  environment: development
+  project: aiops-platform
+  component: logging 

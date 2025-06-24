@@ -1,0 +1,12 @@
+{
+  "id": "model_1750762988",
+  "type": "isolation_forest",
+  "version": "1.0",
+  "created_at": "2025-06-24T07:03:08.606758034-04:00",
+  "updated_at": "2025-06-24T07:05:08.868843186-04:00",
+  "accuracy": 0,
+  "parameters": {
+    "type": "isolation_forest"
+  },
+  "file_path": "models/current_model.json"
+}

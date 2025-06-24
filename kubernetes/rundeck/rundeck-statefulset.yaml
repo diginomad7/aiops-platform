@@ -1,0 +1,209 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: rundeck-secret
+  namespace: rundeck
+type: Opaque
+data:
+  # admin / admin123
+  RUNDECK_ADMIN_PASSWORD: YWRtaW4xMjM=
+  RUNDECK_DATABASE_PASSWORD: cnVuZGVjazEyMw==
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rundeck-config
+  namespace: rundeck
+data:
+  rundeck-config.properties: |
+    # Rundeck Configuration
+    rundeck.storage.provider.1.type=db
+    rundeck.storage.provider.1.config.table=rundeck_storage
+    
+    # Database Configuration  
+    dataSource.url=jdbc:postgresql://postgresql:5432/rundeck
+    dataSource.username=postgres
+    dataSource.driverClassName=org.postgresql.Driver
+    
+    # Server Configuration
+    grails.serverURL=http://rundeck:4440
+    rundeck.gui.title=AIOps Rundeck Orchestrator
+    rundeck.gui.brand=AIOps Platform
+    
+    # Security
+    rundeck.security.useHMacRequestTokens=true
+    rundeck.api.tokens.duration.max=30d
+    
+    # Logging
+    rundeck.log4j.config.file=/home/rundeck/server/config/log4j2.properties
+    rundeck.execution.logs.fileStoragePlugin=db
+    
+    # Node Sources
+    rundeck.nodeService.provider.1.type=script
+    rundeck.nodeService.provider.1.config.script=/home/rundeck/scripts/nodes.sh
+  
+  log4j2.properties: |
+    status = warn
+    dest = err
+    name = PropertiesConfig
+    
+    property.filename = /home/rundeck/server/logs/rundeck.log
+    
+    appender.console.type = Console
+    appender.console.name = STDOUT
+    appender.console.layout.type = PatternLayout
+    appender.console.layout.pattern = %d{yyyy-MM-dd HH:mm:ss} %-5p %c{1}:%L - %m%n
+    
+    appender.file.type = File
+    appender.file.name = LOGFILE
+    appender.file.fileName = ${filename}
+    appender.file.layout.type = PatternLayout
+    appender.file.layout.pattern = %d{yyyy-MM-dd HH:mm:ss} %-5p %c{1}:%L - %m%n
+    
+    logger.rundeck.name = com.dtolabs.rundeck
+    logger.rundeck.level = info
+    logger.rundeck.additivity = false
+    logger.rundeck.appenderRef.stdout.ref = STDOUT
+    logger.rundeck.appenderRef.file.ref = LOGFILE
+    
+    rootLogger.level = info
+    rootLogger.appenderRef.stdout.ref = STDOUT
+    rootLogger.appenderRef.file.ref = LOGFILE
+
+  nodes.sh: |
+    #!/bin/bash
+    # Dynamic node discovery script for AIOps Platform
+    cat << 'NODES_XML'
+    <?xml version="1.0" encoding="UTF-8"?>
+    <project>
+      <!-- Kubernetes Nodes -->
+      <node name="k3s-master" hostname="k3s-master" 
+            tags="kubernetes,master,aiops" 
+            osFamily="linux" 
+            description="K3s Master Node"
+            kubectl-context="default"
+            kubectl-namespace="default"/>
+      
+      <!-- ML Pipeline Service -->
+      <node name="aiops-ml-pipeline" hostname="anomaly-detector" 
+            tags="ml,aiops,detector" 
+            osFamily="container" 
+            description="AIOps ML Pipeline Service"
+            service-port="8080"
+            api-endpoint="/api/v1/anomalies"/>
+      
+      <!-- Monitoring Stack -->
+      <node name="prometheus" hostname="prometheus" 
+            tags="monitoring,metrics,aiops" 
+            osFamily="container" 
+            description="Prometheus Metrics Server"
+            service-port="9090"/>
+      
+      <node name="grafana" hostname="grafana" 
+            tags="monitoring,visualization,aiops" 
+            osFamily="container" 
+            description="Grafana Dashboard"
+            service-port="3000"/>
+    </project>
+    NODES_XML
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rundeck-data-pvc
+  namespace: rundeck
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: local-path
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: rundeck
+  namespace: rundeck
+  labels:
+    app: rundeck
+    component: orchestrator
+spec:
+  serviceName: rundeck
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rundeck
+  template:
+    metadata:
+      labels:
+        app: rundeck
+        component: orchestrator
+    spec:
+      containers:
+      - name: rundeck
+        image: rundeck/rundeck:4.17.0
+        env:
+        - name: RUNDECK_GRAILS_URL
+          value: "http://rundeck:4440"
+        - name: RUNDECK_DATABASE_DRIVER
+          value: "org.postgresql.Driver"
+        - name: RUNDECK_DATABASE_URL
+          value: "jdbc:postgresql://postgresql:5432/rundeck"
+        - name: RUNDECK_DATABASE_USERNAME
+          value: "postgres"
+        - name: RUNDECK_DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rundeck-secret
+              key: RUNDECK_DATABASE_PASSWORD
+        - name: RUNDECK_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: rundeck-secret
+              key: RUNDECK_ADMIN_PASSWORD
+        - name: RUNDECK_LOGGING_STRATEGY
+          value: "CONSOLE"
+        ports:
+        - containerPort: 4440
+          name: rundeck
+        volumeMounts:
+        - name: rundeck-data
+          mountPath: /home/rundeck/server/data
+        - name: rundeck-config
+          mountPath: /home/rundeck/server/config/rundeck-config.properties
+          subPath: rundeck-config.properties
+        - name: rundeck-config
+          mountPath: /home/rundeck/server/config/log4j2.properties
+          subPath: log4j2.properties
+        - name: rundeck-config
+          mountPath: /home/rundeck/scripts/nodes.sh
+          subPath: nodes.sh
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 4440
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 4440
+          initialDelaySeconds: 60
+          periodSeconds: 20
+      volumes:
+      - name: rundeck-data
+        persistentVolumeClaim:
+          claimName: rundeck-data-pvc
+      - name: rundeck-config
+        configMap:
+          name: rundeck-config
+          defaultMode: 0755

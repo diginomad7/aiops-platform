@@ -1,0 +1,113 @@
+# AIOps Monitoring - Persistent Volumes Configuration
+# Context7: Enhanced storage setup with ZFS backend (160GB total allocation)
+
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: prometheus-storage-pv
+  labels:
+    app: prometheus
+    component: storage
+    context: context7
+spec:
+  capacity:
+    storage: 80Gi  # 50% of total 160GB for Prometheus
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /k3s-storage-pool/data/monitoring/prometheus
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ubuser-h510m-h
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: grafana-storage-pv
+  labels:
+    app: grafana
+    component: storage
+    context: context7
+spec:
+  capacity:
+    storage: 20Gi  # 12.5% of total for Grafana dashboards and plugins
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /k3s-storage-pool/data/monitoring/grafana
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ubuser-h510m-h
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: loki-storage-pv
+  labels:
+    app: loki
+    component: storage
+    context: context7
+spec:
+  capacity:
+    storage: 40Gi  # 25% of total for Loki logs
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /k3s-storage-pool/data/monitoring/loki
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ubuser-h510m-h
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: alertmanager-storage-pv
+  labels:
+    app: alertmanager
+    component: storage
+    context: context7
+spec:
+  capacity:
+    storage: 20Gi  # 12.5% of total for AlertManager data
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-path
+  hostPath:
+    path: /k3s-storage-pool/data/monitoring/alertmanager
+    type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: kubernetes.io/hostname
+          operator: In
+          values:
+          - ubuser-h510m-h 

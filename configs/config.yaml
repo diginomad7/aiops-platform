@@ -180,4 +180,43 @@ log_patterns:
   - name: "auth_failures"
     pattern: "Authentication failed|Access denied|Permission denied"
     severity: "high"
-    action: "notification" 
+    action: "notification"
+
+ml:
+  model_path: "models/current_model.json"
+  training_enabled: true
+  threshold: 0.6
+  feature_window: 20
+  model_type: "isolation_forest"
+  storage_path: "./models"
+
+# REMEDIATION SYSTEM REMOVED - WILL USE RUNDECK ORCHESTRATION
+# The following section has been removed as part of architectural correction:
+# - Go-based remediation system replaced with Rundeck orchestrator
+# - Rundeck will handle all orchestration and workflow execution
+# - ML pipeline will integrate with Rundeck via REST API 
+
+# Rundeck Orchestrator Configuration
+rundeck:
+  url: "http://localhost:30440"
+  username: "admin"
+  password: "admin123"
+  project: "aiops-remediation"
+  timeout: 30s
+  
+  # Job mapping for different anomaly types
+  job_mappings:
+    cpu: "ml-triggered-remediation"
+    memory: "ml-triggered-remediation"
+    network: "ml-triggered-remediation"
+    disk: "ml-triggered-remediation"
+    pod_restart: "restart-high-cpu-pod"
+    scale_deployment: "scale-high-memory-deployment"
+    
+  # Remediation settings
+  auto_remediation:
+    enabled: true
+    severity_threshold: "high"  # Trigger for high/critical only
+    max_concurrent_jobs: 5
+    retry_count: 3
+    retry_delay: "30s"

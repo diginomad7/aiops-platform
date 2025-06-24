@@ -1,0 +1,184 @@
+# Prometheus Stack Helm Values - Final Configuration
+# Context7: AIOps Platform - With proper security context for storage access
+
+prometheus:
+  prometheusSpec:
+    # Security context to fix permission issues
+    securityContext:
+      runAsUser: 65534
+      runAsNonRoot: true
+      runAsGroup: 65534
+      fsGroup: 65534
+    
+    # Storage configuration
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 80Gi  # 50% of total 160GB allocation
+    
+    # Resource limits optimized for development environment
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+    
+    # Retention settings for large storage
+    retention: 30d
+    retentionSize: 70GB
+    
+    # Additional scrape configs for custom services
+    additionalScrapeConfigs:
+      - job_name: 'aiops-anomaly-detector'
+        static_configs:
+          - targets: ['anomaly-detector.default.svc.cluster.local:8080']
+        metrics_path: '/metrics'
+        scrape_interval: 30s
+      - job_name: 'windows-server'
+        scrape_interval: 30s
+        static_configs:
+          - targets: ['192.168.0.5:9182']
+            labels:
+              instance: 'windows-server-prod'
+              os: 'windows'
+        
+    # Alert rule configuration
+    ruleSelector:
+      matchLabels:
+        prometheus_alerts: "1"
+        
+    # Rule namespace selector to discover rules across namespaces
+    ruleSelectorNilUsesHelmValues: false
+    ruleNamespaceSelector: {}
+
+# Grafana configuration with simplified storage
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 20Gi
+  
+  # Context7: Automatic dashboard provisioning
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+      folder: /var/lib/grafana/dashboards/default
+      provider:
+        name: default
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /var/lib/grafana/dashboards/default
+
+  dashboards:
+    default:
+      k8s-views-global:
+        gnetId: 15757
+        revision: 1
+        datasource: Prometheus
+      k8s-views-nodes:
+        gnetId: 15759
+        revision: 1
+        datasource: Prometheus
+      k8s-views-namespaces:
+        gnetId: 15758
+        revision: 1
+        datasource: Prometheus
+      k8s-views-pods:
+        gnetId: 15760
+        revision: 1
+        datasource: Prometheus
+      aiops-anomaly-detector:
+        file: /var/lib/grafana/dashboards/default/aiops-anomaly-detector.json
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  
+  # Admin credentials
+  adminPassword: aiops-admin-2024
+
+# AlertManager with simplified storage
+alertmanager:
+  alertmanagerSpec:
+    securityContext:
+      runAsUser: 65534
+      runAsNonRoot: true
+      runAsGroup: 65534
+      fsGroup: 65534
+      
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+    
+    resources:
+      limits:
+        cpu: 200m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+        
+    # Configure basic receivers for alerts
+    config:
+      global:
+        resolve_timeout: 5m
+      route:
+        group_by: ['job', 'alertname', 'context']
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 12h
+        receiver: 'null'
+        routes:
+        - match:
+            context: aiops
+          receiver: 'aiops-team'
+        - match:
+            context: windows
+          receiver: 'windows-team'
+      receivers:
+      - name: 'null'
+      - name: 'aiops-team'
+        # In production, you would configure email, Slack, etc. here
+      - name: 'windows-team'
+        # Windows server alerts receiver
+
+# Node Exporter configuration
+nodeExporter:
+  enabled: true
+  
+# Kube State Metrics configuration  
+kubeStateMetrics:
+  enabled: true
+
+# Global configuration
+global:
+  rbac:
+    create: true
+  
+commonLabels:
+  context: context7
+  environment: development
+  project: aiops-platform 

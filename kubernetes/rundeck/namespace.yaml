@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: rundeck
+  labels:
+    name: rundeck
+    component: orchestration
+    app.kubernetes.io/name: rundeck
+    app.kubernetes.io/component: orchestrator
+    app.kubernetes.io/part-of: aiops-platform 

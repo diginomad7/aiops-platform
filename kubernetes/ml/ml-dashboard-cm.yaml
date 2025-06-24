@@ -1,0 +1,309 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-pipeline-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+    app: aiops-ml
+data:
+  ml-pipeline-dashboard.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "AIOps ML Pipeline",
+        "tags": ["aiops", "ml", "anomaly-detection"],
+        "style": "dark",
+        "timezone": "browser",
+        "refresh": "30s",
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "ML Pipeline Status",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "aiops_ml_pipeline_running",
+                "legendFormat": "Pipeline Running"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  {
+                    "options": {
+                      "0": {
+                        "text": "Stopped",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "Running",
+                        "color": "green"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ],
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "green",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "Processed Samples",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "aiops_ml_processed_samples_total",
+                "legendFormat": "Total Samples"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "unit": "short"
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 6,
+              "y": 0
+            }
+          },
+          {
+            "id": 3,
+            "title": "Detected Anomalies",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "aiops_ml_detected_anomalies_total",
+                "legendFormat": "Total Anomalies"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "unit": "short"
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 12,
+              "y": 0
+            }
+          },
+          {
+            "id": 4,
+            "title": "Model Accuracy",
+            "type": "gauge",
+            "targets": [
+              {
+                "expr": "aiops_ml_model_accuracy",
+                "legendFormat": "Accuracy"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "thresholds"
+                },
+                "thresholds": {
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "yellow",
+                      "value": 0.7
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.85
+                    }
+                  ]
+                },
+                "min": 0,
+                "max": 1,
+                "unit": "percentunit"
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 6,
+              "x": 18,
+              "y": 0
+            }
+          },
+          {
+            "id": 5,
+            "title": "Processing Latency",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "aiops_ml_processing_latency_ms",
+                "legendFormat": "Latency (ms)"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "unit": "ms"
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 8
+            }
+          },
+          {
+            "id": 6,
+            "title": "Sample Processing Rate",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(aiops_ml_processed_samples_total[5m])",
+                "legendFormat": "Samples/sec"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "unit": "short"
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 8
+            }
+          },
+          {
+            "id": 7,
+            "title": "Anomaly Detection Rate",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(aiops_ml_detected_anomalies_total[5m])",
+                "legendFormat": "Anomalies/sec"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "unit": "short"
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 16
+            }
+          },
+          {
+            "id": 8,
+            "title": "Error Rate",
+            "type": "timeseries",
+            "targets": [
+              {
+                "expr": "rate(aiops_ml_error_count_total[5m])",
+                "legendFormat": "Errors/sec"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {
+                  "mode": "palette-classic"
+                },
+                "unit": "short"
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 16
+            }
+          },
+          {
+            "id": 9,
+            "title": "Component Health",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "aiops_ml_pipeline_running",
+                "legendFormat": "ML Pipeline",
+                "instant": true
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  {
+                    "options": {
+                      "0": {
+                        "text": "❌ Down",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "✅ Up",
+                        "color": "green"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 24
+            }
+          }
+        ],
+        "schemaVersion": 30,
+        "version": 1
+      }
+    } 

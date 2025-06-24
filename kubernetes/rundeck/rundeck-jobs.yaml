@@ -1,0 +1,188 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rundeck-jobs
+  namespace: rundeck
+data:
+  aiops-remediation-jobs.yaml: |
+    - defaultTab: nodes
+      description: 'Restart pod when CPU usage is critical'
+      executionEnabled: true
+      id: restart-high-cpu-pod
+      loglevel: INFO
+      name: 'Restart High CPU Pod'
+      nodeFilterEditable: false
+      scheduleEnabled: true
+      sequence:
+        commands:
+        - description: 'Check pod CPU usage via ML Pipeline API'
+          script: |
+            #!/bin/bash
+            # Get anomaly data from ML Pipeline
+            ANOMALY_DATA=$(curl -s http://anomaly-detector.aiops:8080/api/v1/anomalies?type=cpu)
+            echo "Anomaly Data: $ANOMALY_DATA"
+            
+            # Extract pod name from anomaly data
+            POD_NAME=$(echo "$ANOMALY_DATA" | jq -r '.anomalies[] | select(.severity=="critical") | .resource.name' | head -1)
+            NAMESPACE=$(echo "$ANOMALY_DATA" | jq -r '.anomalies[] | select(.severity=="critical") | .resource.namespace' | head -1)
+            
+            if [ "$POD_NAME" != "null" ] && [ "$POD_NAME" != "" ]; then
+              echo "Found critical CPU anomaly in pod: $POD_NAME in namespace: $NAMESPACE"
+              kubectl delete pod "$POD_NAME" -n "$NAMESPACE"
+              echo "Pod $POD_NAME restarted"
+            else
+              echo "No critical CPU anomalies found"
+            fi
+        keepgoing: false
+        strategy: node-first
+      uuid: restart-high-cpu-pod
+      
+    - defaultTab: nodes
+      description: 'Scale deployment when memory usage is high'
+      executionEnabled: true
+      id: scale-high-memory-deployment
+      loglevel: INFO
+      name: 'Scale High Memory Deployment'
+      nodeFilterEditable: false
+      scheduleEnabled: true
+      sequence:
+        commands:
+        - description: 'Scale deployment based on memory anomalies'
+          script: |
+            #!/bin/bash
+            # Get memory anomaly data
+            ANOMALY_DATA=$(curl -s http://anomaly-detector.aiops:8080/api/v1/anomalies?type=memory)
+            echo "Memory Anomaly Data: $ANOMALY_DATA"
+            
+            # Extract deployment info
+            DEPLOYMENT=$(echo "$ANOMALY_DATA" | jq -r '.anomalies[] | select(.severity=="high") | .resource.deployment' | head -1)
+            NAMESPACE=$(echo "$ANOMALY_DATA" | jq -r '.anomalies[] | select(.severity=="high") | .resource.namespace' | head -1)
+            
+            if [ "$DEPLOYMENT" != "null" ] && [ "$DEPLOYMENT" != "" ]; then
+              CURRENT_REPLICAS=$(kubectl get deployment "$DEPLOYMENT" -n "$NAMESPACE" -o jsonpath='{.spec.replicas}')
+              NEW_REPLICAS=$((CURRENT_REPLICAS + 1))
+              
+              echo "Scaling deployment $DEPLOYMENT from $CURRENT_REPLICAS to $NEW_REPLICAS replicas"
+              kubectl scale deployment "$DEPLOYMENT" --replicas="$NEW_REPLICAS" -n "$NAMESPACE"
+              echo "Deployment $DEPLOYMENT scaled successfully"
+            else
+              echo "No high memory anomalies found"
+            fi
+        keepgoing: false
+        strategy: node-first
+      uuid: scale-high-memory-deployment
+      
+    - defaultTab: nodes
+      description: 'Clean up failed pods automatically'
+      executionEnabled: true
+      id: cleanup-failed-pods
+      loglevel: INFO
+      name: 'Cleanup Failed Pods'
+      nodeFilterEditable: false
+      scheduleEnabled: true
+      schedule:
+        time:
+          hour: '*'
+          minute: '*/15'
+      sequence:
+        commands:
+        - description: 'Remove pods in failed state'
+          script: |
+            #!/bin/bash
+            echo "Checking for failed pods across all namespaces..."
+            
+            # Get all failed pods
+            FAILED_PODS=$(kubectl get pods --all-namespaces --field-selector=status.phase=Failed -o json)
+            
+            if [ "$(echo "$FAILED_PODS" | jq '.items | length')" -gt 0 ]; then
+              echo "Found failed pods, cleaning up..."
+              kubectl get pods --all-namespaces --field-selector=status.phase=Failed -o json | \
+                jq -r '.items[] | "\(.metadata.namespace) \(.metadata.name)"' | \
+                while read namespace pod; do
+                  echo "Deleting failed pod: $pod in namespace: $namespace"
+                  kubectl delete pod "$pod" -n "$namespace"
+                done
+            else
+              echo "No failed pods found"
+            fi
+        keepgoing: false
+        strategy: node-first
+      uuid: cleanup-failed-pods
+
+    - defaultTab: nodes
+      description: 'Execute remediation based on ML Pipeline alerts'
+      executionEnabled: true
+      id: ml-triggered-remediation
+      loglevel: INFO
+      name: 'ML Triggered Remediation'
+      nodeFilterEditable: false
+      options:
+        anomaly_type:
+          description: 'Type of anomaly detected'
+          required: true
+        resource_name:
+          description: 'Name of the affected resource'
+          required: true
+        namespace:
+          description: 'Kubernetes namespace'
+          required: true
+          value: 'default'
+        severity:
+          description: 'Severity level'
+          required: true
+          values: ['low', 'medium', 'high', 'critical']
+      sequence:
+        commands:
+        - description: 'Execute targeted remediation based on anomaly type and severity'
+          script: |
+            #!/bin/bash
+            ANOMALY_TYPE="@option.anomaly_type@"
+            RESOURCE_NAME="@option.resource_name@"
+            NAMESPACE="@option.namespace@"
+            SEVERITY="@option.severity@"
+            
+            echo "Processing remediation for:"
+            echo "  Anomaly Type: $ANOMALY_TYPE"
+            echo "  Resource: $RESOURCE_NAME"
+            echo "  Namespace: $NAMESPACE"
+            echo "  Severity: $SEVERITY"
+            
+            case "$ANOMALY_TYPE" in
+              "cpu")
+                if [ "$SEVERITY" = "critical" ]; then
+                  echo "Critical CPU anomaly - restarting pod"
+                  kubectl delete pod "$RESOURCE_NAME" -n "$NAMESPACE"
+                elif [ "$SEVERITY" = "high" ]; then
+                  echo "High CPU anomaly - checking for HPA"
+                  kubectl get hpa -n "$NAMESPACE" | grep "$RESOURCE_NAME" || \
+                    kubectl autoscale deployment "$RESOURCE_NAME" --cpu-percent=70 --min=1 --max=5 -n "$NAMESPACE"
+                fi
+                ;;
+              "memory")
+                if [ "$SEVERITY" = "critical" ] || [ "$SEVERITY" = "high" ]; then
+                  echo "Memory anomaly - scaling deployment"
+                  CURRENT=$(kubectl get deployment "$RESOURCE_NAME" -n "$NAMESPACE" -o jsonpath='{.spec.replicas}')
+                  NEW=$((CURRENT + 1))
+                  kubectl scale deployment "$RESOURCE_NAME" --replicas="$NEW" -n "$NAMESPACE"
+                fi
+                ;;
+              "network")
+                echo "Network anomaly detected - checking service endpoints"
+                kubectl get endpoints -n "$NAMESPACE"
+                kubectl describe service "$RESOURCE_NAME" -n "$NAMESPACE"
+                ;;
+              "disk")
+                echo "Disk anomaly - checking persistent volumes"
+                kubectl get pv,pvc -n "$NAMESPACE"
+                ;;
+              *)
+                echo "Unknown anomaly type: $ANOMALY_TYPE"
+                ;;
+            esac
+            
+            # Log remediation action
+            echo "Remediation completed at $(date)"
+        keepgoing: false
+        strategy: node-first
+      uuid: ml-triggered-remediation

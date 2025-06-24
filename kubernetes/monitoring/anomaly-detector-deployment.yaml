@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: anomaly-detector
+  namespace: default
+  labels:
+    app: anomaly-detector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: anomaly-detector
+  template:
+    metadata:
+      labels:
+        app: anomaly-detector
+    spec:
+      containers:
+      - name: anomaly-detector
+        image: busybox:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Create a simple HTTP server that exposes metrics
+          while true; do
+            { echo -e "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\n"; } | nc -l -p 8080 -q 1
+            
+            # Simulate metrics endpoint
+            if [[ "$REQUEST_URI" == "/metrics" ]]; then
+              echo "# HELP aiops_anomaly_score Current anomaly score"
+              echo "# TYPE aiops_anomaly_score gauge"
+              echo "aiops_anomaly_score $(awk -v min=0.1 -v max=0.9 'BEGIN{srand(); print min+rand()*(max-min)}')"
+              
+              echo "# HELP aiops_detection_latency_seconds Detection latency in seconds"
+              echo "# TYPE aiops_detection_latency_seconds gauge"
+              echo "aiops_detection_latency_seconds $(awk -v min=0.05 -v max=0.8 'BEGIN{srand(); print min+rand()*(max-min)}')"
+              
+              echo "# HELP aiops_detector_up Detector is running"
+              echo "# TYPE aiops_detector_up gauge"
+              echo "aiops_detector_up 1"
+            fi
+            
+            # Simulate health endpoint
+            if [[ "$REQUEST_URI" == "/health" ]]; then
+              echo "{\"status\":\"healthy\",\"timestamp\":\"$(date -Iseconds)\"}"
+            fi
+            
+            # Log to stdout in JSON format
+            echo "{\"level\":\"info\",\"message\":\"Processed request\",\"timestamp\":\"$(date -Iseconds)\",\"service\":\"anomaly-detector\"}"
+            
+            # Occasionally log anomaly detection
+            if [ $((RANDOM % 10)) -eq 0 ]; then
+              SCORE=$(awk -v min=0.1 -v max=0.9 'BEGIN{srand(); print min+rand()*(max-min)}')
+              echo "{\"level\":\"warning\",\"message\":\"Potential anomaly detected score=$SCORE\",\"timestamp\":\"$(date -Iseconds)\",\"service\":\"anomaly-detector\",\"traceID\":\"trace-$(date +%s)\"}"
+            fi
+            
+            sleep 5
+          done
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        resources:
+          limits:
+            cpu: 200m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 5 

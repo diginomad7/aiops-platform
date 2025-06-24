@@ -1,0 +1,31 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: aiops-ml-pipeline
+  namespace: monitoring
+  labels:
+    app: aiops-ml
+    component: ml-pipeline
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: aiops-ml
+      component: ml-pipeline
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+    scheme: http
+    scrapeTimeout: 10s
+    honorLabels: true
+    metricRelabelings:
+    - sourceLabels: [__name__]
+      regex: 'aiops_ml_.*'
+      action: keep
+    - sourceLabels: [__name__]
+      regex: 'aiops_detector_.*'
+      action: keep
+  namespaceSelector:
+    matchNames:
+    - monitoring 

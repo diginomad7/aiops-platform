@@ -1,0 +1,92 @@
+# Prometheus Stack Helm Values - Fixed Configuration
+# Context7: AIOps Platform - Simplified configuration for reliable deployment
+
+prometheus:
+  prometheusSpec:
+    # Storage configuration without selector
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 80Gi  # 50% of total 160GB allocation
+    
+    # Resource limits optimized for development environment
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+    
+    # Retention settings for large storage
+    retention: 30d
+    retentionSize: 70GB
+    
+    # Additional scrape configs for custom services
+    additionalScrapeConfigs:
+      - job_name: 'aiops-anomaly-detector'
+        static_configs:
+          - targets: ['anomaly-detector.default.svc.cluster.local:8080']
+        metrics_path: '/metrics'
+        scrape_interval: 30s
+
+# Grafana configuration with simplified storage
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 20Gi
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  
+  # Admin credentials
+  adminPassword: aiops-admin-2024
+
+# AlertManager with simplified storage
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+    
+    resources:
+      limits:
+        cpu: 200m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+# Node Exporter configuration
+nodeExporter:
+  enabled: true
+  
+# Kube State Metrics configuration  
+kubeStateMetrics:
+  enabled: true
+
+# Global configuration
+global:
+  rbac:
+    create: true
+  
+commonLabels:
+  context: context7
+  environment: development
+  project: aiops-platform 

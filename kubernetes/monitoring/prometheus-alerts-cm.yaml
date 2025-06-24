@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-aiops-alerts
+  namespace: monitoring
+  labels:
+    prometheus_alerts: "1"
+data:
+  aiops-alerts.yaml: |-
+    groups:
+    - name: aiops-anomaly-detector
+      rules:
+      - alert: HighAnomalyScore
+        expr: avg(aiops_anomaly_score) > 0.7
+        for: 5m
+        labels:
+          severity: warning
+          context: aiops
+        annotations:
+          summary: "High anomaly score detected"
+          description: "The anomaly score has been above 0.7 for 5 minutes, indicating potential system issues."
+          dashboard: "https://grafana:3000/d/aiops-anomaly-detector"
+          
+      - alert: CriticalAnomalyScore
+        expr: avg(aiops_anomaly_score) > 0.9
+        for: 2m
+        labels:
+          severity: critical
+          context: aiops
+        annotations:
+          summary: "Critical anomaly score detected"
+          description: "The anomaly score has been above 0.9 for 2 minutes, indicating serious system issues that require immediate attention."
+          dashboard: "https://grafana:3000/d/aiops-anomaly-detector"
+          
+      - alert: HighDetectionLatency
+        expr: aiops_detection_latency_seconds > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          context: aiops
+        annotations:
+          summary: "High anomaly detection latency"
+          description: "The anomaly detection latency has been above 1 second for 5 minutes, which may indicate performance issues with the detector service."
+          dashboard: "https://grafana:3000/d/aiops-anomaly-detector" 

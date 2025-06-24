@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aiops-ml-service
+  namespace: monitoring
+  labels:
+    app: aiops-ml
+    component: ml-pipeline
+spec:
+  selector:
+    app: aiops-detector
+    component: ml-pipeline
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  - name: metrics
+    port: 8081
+    targetPort: 8081
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-config
+  namespace: monitoring
+  labels:
+    app: aiops-ml
+data:
+  ml.yaml: |
+    ml:
+      model_path: "/data/models/current_model.json"
+      training_enabled: true
+      threshold: 0.6
+      feature_window: 20
+      model_type: "isolation_forest"
+      storage_path: "/data/models"
+    
+    api:
+      port: 8080
+      host: "0.0.0.0"
+      enable_cors: true
+      timeout: 30s
+    
+    prometheus:
+      url: "http://prometheus:9090"
+      collect_interval: 1m
+    
+    loki:
+      url: "http://loki:3100"
+    
+    logging:
+      level: "info"
+      format: "json"
+      output: "stdout" 

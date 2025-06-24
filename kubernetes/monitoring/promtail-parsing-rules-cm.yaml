@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: promtail-parsing-rules
+  namespace: monitoring
+data:
+  custom-rules.yaml: |
+    # Custom parsing rules for Promtail
+    
+    # Rules for anomaly detector logs
+    - match:
+        selector: '{app="anomaly-detector"}'
+        stages:
+          # Parse JSON logs
+          - json:
+              expressions:
+                level: level
+                message: message
+                timestamp: timestamp
+                service: service
+                traceID: traceID
+          
+          # Extract labels
+          - labels:
+              level:
+              service:
+              traceID:
+          
+          # Extract anomaly score from log message
+          - regex:
+              expression: '.*anomaly detected.*score=(?P<score>[0-9.]+).*'
+              source: message
+          
+          # Set score as a label if found
+          - labels:
+              score:
+          
+          # Create metrics from logs
+          - metrics:
+              anomaly_log_count:
+                type: Counter
+                description: "Count of anomaly log entries"
+                source: message
+                config:
+                  match: ".*anomaly detected.*"
+                  action: inc
+              
+              high_anomaly_score:
+                type: Counter
+                description: "Count of high anomaly scores (>0.8)"
+                source: message
+                config:
+                  match: ".*anomaly detected.*score=(0\\.[8-9][0-9]*|1\\.0).*"
+                  action: inc
+    
+    # Rules for Windows logs (if collected)
+    - match:
+        selector: '{app="windows-logs"}'
+        stages:
+          # Parse Windows event logs
+          - regex:
+              expression: '(?P<timestamp>\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) (?P<level>INFO|WARN|ERROR|FATAL) (?P<source>[^:]+): (?P<message>.*)'
+          
+          # Extract labels
+          - labels:
+              level:
+              source:
+          
+          # Create metrics from logs
+          - metrics:
+              windows_error_count:
+                type: Counter
+                description: "Count of Windows error logs"
+                source: level
+                config:
+                  match: "ERROR|FATAL"
+                  action: inc
+    
+    # Rules for Kubernetes system logs
+    - match:
+        selector: '{namespace="kube-system"}'
+        stages:
+          # Extract common patterns
+          - regex:
+              expression: '(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z) (?P<level>INFO|WARN|ERROR|FATAL) (?P<component>[^:]+): (?P<message>.*)'
+          
+          # Extract labels
+          - labels:
+              level:
+              component:
+          
+          # Create metrics from logs
+          - metrics:
+              k8s_error_count:
+                type: Counter
+                description: "Count of Kubernetes error logs"
+                source: level
+                config:
+                  match: "ERROR|FATAL"
+                  action: inc 

@@ -1,0 +1,141 @@
+# Prometheus Stack Helm Values
+# Context7: AIOps Platform - Enhanced monitoring configuration with 160GB storage allocation
+
+prometheus:
+  prometheusSpec:
+    # Storage configuration for Prometheus TSDB
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 80Gi  # 50% of total 160GB allocation
+          selector:
+            matchLabels:
+              app: prometheus
+              component: storage
+              context: context7
+    
+    # Resource limits optimized for development environment
+    resources:
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+      requests:
+        cpu: 1000m
+        memory: 2Gi
+    
+    # Retention settings for large storage
+    retention: 30d
+    retentionSize: 70GB
+    
+    # Service monitoring for AIOps components
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector:
+      matchLabels:
+        context: context7
+    
+    # Additional scrape configs for custom services
+    additionalScrapeConfigs:
+      - job_name: 'aiops-anomaly-detector'
+        static_configs:
+          - targets: ['anomaly-detector.default.svc.cluster.local:8080']
+        metrics_path: '/metrics'
+        scrape_interval: 30s
+        
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+
+# Grafana configuration with enhanced storage
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 20Gi
+    selector:
+      matchLabels:
+        app: grafana
+        component: storage
+        context: context7
+  
+  resources:
+    limits:
+      cpu: 500m
+      memory: 1Gi
+    requests:
+      cpu: 250m
+      memory: 512Mi
+  
+  # Admin credentials
+  adminPassword: aiops-admin-2024
+  
+  # Data source configuration
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
+          access: proxy
+          isDefault: true
+        - name: Loki
+          type: loki
+          url: http://loki.monitoring.svc.cluster.local:3100
+          access: proxy
+          isDefault: false
+
+# AlertManager configuration
+alertmanager:
+  alertmanagerSpec:
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+          selector:
+            matchLabels:
+              app: alertmanager
+              component: storage
+              context: context7
+    
+    resources:
+      limits:
+        cpu: 200m
+        memory: 512Mi
+      requests:
+        cpu: 100m
+        memory: 256Mi
+
+# Node Exporter configuration
+nodeExporter:
+  enabled: true
+  
+# Kube State Metrics configuration  
+kubeStateMetrics:
+  enabled: true
+
+# Global configuration
+global:
+  rbac:
+    create: true
+  
+commonLabels:
+  context: context7
+  environment: development
+  project: aiops-platform 

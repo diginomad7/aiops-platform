@@ -1,0 +1,22 @@
+{
+  "type": "isolation_forest",
+  "parameters": {
+    "max_depth": 10,
+    "sample_ratio": 0.8,
+    "tree_count": 100
+  },
+  "statistics": {
+    "feature_means": null,
+    "feature_stds": null,
+    "feature_count": 0,
+    "tree_count": 0,
+    "max_depth": 0,
+    "threshold": 0,
+    "train_time": "0001-01-01T00:00:00Z"
+  },
+  "thresholds": {
+    "anomaly_threshold": 0.6
+  },
+  "trained_at": "2025-06-24T07:03:08.606757473-04:00",
+  "sample_count": 0
+}
